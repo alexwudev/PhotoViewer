@@ -1,0 +1,163 @@
+Windows Registry Editor Version 5.00
+
+; ================================================================
+;  Photo Viewer - file association + thumbnail-preserving ProgID
+;  Target EXE: %LOCALAPPDATA%\PhotoViewer\PhotoViewer.exe
+;  (open commands are REG_EXPAND_SZ, so no user name is hard-coded)
+;
+;  Key trick for thumbnails:
+;    DefaultIcon = "%1"  -> tells Explorer to use the file itself
+;    as its icon, which activates the system image thumbnail
+;    provider instead of showing a generic app icon.
+;
+;  After importing: restart explorer.exe (Task Manager -> Windows
+;  Explorer -> Restart), or sign out/in.
+; ================================================================
+
+; ---- Registered application (shown in Open With list) ----
+[HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewer.exe]
+"FriendlyAppName"="Photo Viewer"
+
+[HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewer.exe\shell\open\command]
+; "%LOCALAPPDATA%\PhotoViewer\PhotoViewer.exe" "%1"
+@=hex(2):22,00,25,00,4c,00,4f,00,43,00,41,00,4c,00,41,00,50,00,50,00,44,00,41,00,54,00,41,00,25,00,5c,00,50,00,68,00,6f,00,74,00,6f,00,56,00,69,00,65,00,77,00,65,00,72,00,5c,00,50,00,68,00,6f,00,74,00,6f,00,56,00,69,00,65,00,77,00,65,00,72,00,2e,00,65,00,78,00,65,00,22,00,20,00,22,00,25,00,31,00,22,00,00,00
+
+[HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewer.exe\SupportedTypes]
+".jpg"=""
+".jpeg"=""
+".png"=""
+".bmp"=""
+".gif"=""
+".webp"=""
+".tif"=""
+".tiff"=""
+".ico"=""
+
+; ---- Attach thumbnail provider to Applications\PhotoViewer.exe ----
+; When the user picks PhotoViewer via "Open with -> Always use",
+; Windows writes UserChoice = Applications\PhotoViewer.exe and
+; resolves thumbnails from THIS class. We hook the system WIC
+; photo thumbnail provider here so real thumbnails keep showing.
+[HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewer.exe\ShellEx\{e357fccd-a995-4576-b01f-234630154e96}]
+@="{C7657C4A-9F68-40fa-A4DF-96BC08EB3551}"
+
+[HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewer.exe\DefaultIcon]
+@="\"%1\""
+
+; ================================================================
+;  Shadow registration for WebP: same EXE, different Applications\
+;  class so we can attach the webp-specific WIC thumbnail provider
+;  (CLSID {c5aec3ec-e812-4677-a9a7-4fee1f9aa000}, supplied by the
+;  Microsoft WebP Image Extensions). jpg/png/etc. keep using the
+;  generic PhotoThumbnailProvider on PhotoViewer.exe above.
+; ================================================================
+[HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewerWebp.exe]
+"FriendlyAppName"="Photo Viewer (WebP)"
+
+[HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewerWebp.exe\shell\open\command]
+; "%LOCALAPPDATA%\PhotoViewer\PhotoViewer.exe" "%1"
+@=hex(2):22,00,25,00,4c,00,4f,00,43,00,41,00,4c,00,41,00,50,00,50,00,44,00,41,00,54,00,41,00,25,00,5c,00,50,00,68,00,6f,00,74,00,6f,00,56,00,69,00,65,00,77,00,65,00,72,00,5c,00,50,00,68,00,6f,00,74,00,6f,00,56,00,69,00,65,00,77,00,65,00,72,00,2e,00,65,00,78,00,65,00,22,00,20,00,22,00,25,00,31,00,22,00,00,00
+
+[HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewerWebp.exe\SupportedTypes]
+".webp"=""
+
+[HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewerWebp.exe\ShellEx\{e357fccd-a995-4576-b01f-234630154e96}]
+@="{c5aec3ec-e812-4677-a9a7-4fee1f9aa000}"
+
+[HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewerWebp.exe\DefaultIcon]
+@="\"%1\""
+
+[HKEY_CURRENT_USER\Software\Classes\.webp\OpenWithList\PhotoViewerWebp.exe]
+
+; ---- ProgID used when PhotoViewer is set as the default app ----
+[HKEY_CURRENT_USER\Software\Classes\PhotoViewer.Image]
+@="Image File"
+"FriendlyTypeName"="Image File"
+"PerceivedType"="image"
+
+; DefaultIcon = "%1" -> use the file itself as its icon
+; This is what keeps Explorer thumbnails working after setting
+; PhotoViewer as the default program.
+[HKEY_CURRENT_USER\Software\Classes\PhotoViewer.Image\DefaultIcon]
+@="\"%1\""
+
+[HKEY_CURRENT_USER\Software\Classes\PhotoViewer.Image\shell\open\command]
+; "%LOCALAPPDATA%\PhotoViewer\PhotoViewer.exe" "%1"
+@=hex(2):22,00,25,00,4c,00,4f,00,43,00,41,00,4c,00,41,00,50,00,50,00,44,00,41,00,54,00,41,00,25,00,5c,00,50,00,68,00,6f,00,74,00,6f,00,56,00,69,00,65,00,77,00,65,00,72,00,5c,00,50,00,68,00,6f,00,74,00,6f,00,56,00,69,00,65,00,77,00,65,00,72,00,2e,00,65,00,78,00,65,00,22,00,20,00,22,00,25,00,31,00,22,00,00,00
+
+; ---- Thumbnail provider (IThumbnailProvider) ----
+; Hook the system WIC Photo Thumbnail Provider onto our ProgID so
+; Explorer can render real image thumbnails when PhotoViewer is
+; set as the default app. IID = {e357fccd-a995-4576-b01f-234630154e96}
+; CLSID = {C7657C4A-9F68-40fa-A4DF-96BC08EB3551} (PhotoThumbnailProvider)
+[HKEY_CURRENT_USER\Software\Classes\PhotoViewer.Image\ShellEx\{e357fccd-a995-4576-b01f-234630154e96}]
+@="{C7657C4A-9F68-40fa-A4DF-96BC08EB3551}"
+
+; Treatment hint: let Explorer scale the thumbnail like normal photos
+[HKEY_CURRENT_USER\Software\Classes\PhotoViewer.Image]
+"Treatment"=dword:00000000
+"TypeOverlay"=""
+
+; ---- OpenWithProgids: advertise PhotoViewer.Image + Open With list ----
+[HKEY_CURRENT_USER\Software\Classes\.jpg\OpenWithProgids]
+"PhotoViewer.Image"=hex(0):
+
+[HKEY_CURRENT_USER\Software\Classes\.jpg\OpenWithList]
+"a"="PhotoViewer.exe"
+"MRUList"="a"
+
+[HKEY_CURRENT_USER\Software\Classes\.jpeg\OpenWithProgids]
+"PhotoViewer.Image"=hex(0):
+
+[HKEY_CURRENT_USER\Software\Classes\.jpeg\OpenWithList]
+"a"="PhotoViewer.exe"
+"MRUList"="a"
+
+[HKEY_CURRENT_USER\Software\Classes\.png\OpenWithProgids]
+"PhotoViewer.Image"=hex(0):
+
+[HKEY_CURRENT_USER\Software\Classes\.png\OpenWithList]
+"a"="PhotoViewer.exe"
+"MRUList"="a"
+
+[HKEY_CURRENT_USER\Software\Classes\.bmp\OpenWithProgids]
+"PhotoViewer.Image"=hex(0):
+
+[HKEY_CURRENT_USER\Software\Classes\.bmp\OpenWithList]
+"a"="PhotoViewer.exe"
+"MRUList"="a"
+
+[HKEY_CURRENT_USER\Software\Classes\.gif\OpenWithProgids]
+"PhotoViewer.Image"=hex(0):
+
+[HKEY_CURRENT_USER\Software\Classes\.gif\OpenWithList]
+"a"="PhotoViewer.exe"
+"MRUList"="a"
+
+[HKEY_CURRENT_USER\Software\Classes\.webp\OpenWithProgids]
+"PhotoViewer.Image"=hex(0):
+
+[HKEY_CURRENT_USER\Software\Classes\.webp\OpenWithList]
+"a"="PhotoViewer.exe"
+"MRUList"="a"
+
+[HKEY_CURRENT_USER\Software\Classes\.tif\OpenWithProgids]
+"PhotoViewer.Image"=hex(0):
+
+[HKEY_CURRENT_USER\Software\Classes\.tif\OpenWithList]
+"a"="PhotoViewer.exe"
+"MRUList"="a"
+
+[HKEY_CURRENT_USER\Software\Classes\.tiff\OpenWithProgids]
+"PhotoViewer.Image"=hex(0):
+
+[HKEY_CURRENT_USER\Software\Classes\.tiff\OpenWithList]
+"a"="PhotoViewer.exe"
+"MRUList"="a"
+
+[HKEY_CURRENT_USER\Software\Classes\.ico\OpenWithProgids]
+"PhotoViewer.Image"=hex(0):
+
+[HKEY_CURRENT_USER\Software\Classes\.ico\OpenWithList]
+"a"="PhotoViewer.exe"
+"MRUList"="a"
