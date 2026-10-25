@@ -40,9 +40,18 @@ ZOOM_MIN = 0.05
 ZOOM_MAX = 20.0
 
 
+def _natural(s):
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', s)]
+
+
 def natural_key(p):
     """Sort key on the file name so that p2 comes before p10."""
-    return [int(s) if s.isdigit() else s.lower() for s in re.split(r'(\d+)', p.name)]
+    return _natural(p.name)
+
+
+def folder_then_name_key(p):
+    """Group by folder (natural order of each path part), then by file name."""
+    return ([_natural(part) for part in p.parent.parts], natural_key(p))
 
 
 # ---- Windows shell helpers ----
@@ -641,11 +650,11 @@ class PhotoViewer(QMainWindow):
     def load_list(self, paths, select):
         """Use an explicit file list (Explorer search results), possibly spanning folders."""
         key = os.path.normcase(str(select))
-        # by file name only (p1, p2, ..., p10), not the order Explorer shows;
-        # same-named files in different folders fall back to folder path
+        # finish one folder (by file name: p1, p2, ..., p10) before the next,
+        # regardless of the order Explorer shows
         files = sorted(
             (p for p in paths if p.suffix.lower() in SUPPORTED_EXTS),
-            key=lambda p: (natural_key(p), str(p.parent).lower()),
+            key=folder_then_name_key,
         )
         self.from_search = True
         self.files = files
