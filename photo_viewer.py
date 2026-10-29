@@ -252,9 +252,10 @@ class ImageView(QWidget):
     def _fit_scale(self):
         if self._orig_size.width() <= 0 or self._orig_size.height() <= 0:
             return 1.0
+        # small images are enlarged too, until the limiting side meets the window edge
         sx = self.width() / self._orig_size.width()
         sy = self.height() / self._orig_size.height()
-        return min(sx, sy, 1.0)
+        return min(sx, sy)
 
     def _effective_scale(self):
         if self._zoom > 0:
