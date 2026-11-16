@@ -497,6 +497,8 @@ class PhotoViewer(QMainWindow):
 
         tb.addSeparator()
         a = QAction("\u5168\u87a2\u5e55\u5e7b\u71c8\u7247 (F5/F11/F12)", self); a.triggered.connect(self.toggle_slideshow); tb.addAction(a)
+        tb.addSeparator()
+        a = QAction("\u95dc\u9589\u5168\u90e8\u5716\u7247", self); a.triggered.connect(self.close_all_viewers); tb.addAction(a)
 
     def _build_shortcuts(self):
         def add(seq, slot):
@@ -569,8 +571,21 @@ class PhotoViewer(QMainWindow):
             menu.addAction("\u96e2\u958b\u5e7b\u71c8\u7247\u6a21\u5f0f", self.stop_slideshow)
         else:
             menu.addAction("\u95dc\u9589 PhotoViewer", self.close)
+        menu.addAction("\u95dc\u9589\u5168\u90e8\u5716\u7247", self.close_all_viewers)
 
         menu.exec(self.view.mapToGlobal(pos))
+
+    def close_all_viewers(self):
+        """Close this window and every other running PhotoViewer instance."""
+        if sys.platform == "win32" and getattr(sys, "frozen", False):
+            # without /F taskkill sends WM_CLOSE, so the others shut down normally;
+            # only the packaged exe is matched (running from source would be python.exe)
+            exe = os.path.basename(sys.executable)
+            subprocess.run(
+                ["taskkill", "/IM", exe, "/FI", "PID ne " + str(os.getpid())],
+                capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+        self.close()
 
     def _current_path(self):
         if self.files and 0 <= self.index < len(self.files):
@@ -746,13 +761,14 @@ class PhotoViewer(QMainWindow):
         self.slideshow_timer.stop()
         self.btn_slideshow.setText("\u25b6 \u64ad\u653e\u5e7b\u71c8\u7247 (F5)")
         if self.isFullScreen():
-            self.showNormal()
+            # leave full screen into a maximized window, not the old small one
+            self.showMaximized()
 
     def on_escape(self):
         if self.slideshow_active:
             self.stop_slideshow()
         elif self.isFullScreen():
-            self.showNormal()
+            self.showMaximized()
 
 
 def main():
