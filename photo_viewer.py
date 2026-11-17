@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QLabel, QFileDialog, QToolBar,
@@ -16,7 +17,7 @@ from PyQt6.QtGui import (
     QPixmap, QMovie, QAction, QActionGroup, QKeySequence, QImageReader,
     QPainter, QImage, QClipboard, QGuiApplication,
 )
-from PyQt6.QtCore import Qt, QTimer, QSize, QRect, QPoint
+from PyQt6.QtCore import Qt, QTimer, QSize, QRect, QPoint, QBuffer, QIODevice
 
 SUPPORTED_EXTS = {
     ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp",
@@ -85,6 +86,79 @@ def send_to_recycle_bin(path):
     rc = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
     if rc != 0 or op.fAnyOperationsAborted:
         raise OSError("SHFileOperation failed (code " + hex(rc) + ")")
+
+
+def set_clipboard_image_win32(img, hwnd=None):
+    """Put `img` on the Windows clipboard as ready-made data. Raises OSError on failure.
+
+    QClipboard.setImage() advertises ~20 formats and encodes each one only when a
+    reader asks for it (xpm alone took 15 s for a 12 MP photo), so pasting into
+    apps such as LINE stalled. Here only CF_DIB is offered, plus PNG when the image
+    has transparency, and both are rendered up front.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    user32.OpenClipboard.argtypes = [wintypes.HWND]
+    user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+    user32.SetClipboardData.restype = wintypes.HANDLE
+    user32.RegisterClipboardFormatW.argtypes = [wintypes.LPCWSTR]
+    user32.RegisterClipboardFormatW.restype = wintypes.UINT
+    kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+    kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+    kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalFree.argtypes = [wintypes.HGLOBAL]
+
+    has_alpha = img.hasAlphaChannel()
+    img32 = img.convertToFormat(
+        QImage.Format.Format_ARGB32 if has_alpha else QImage.Format.Format_RGB32)
+    # DIB rows run bottom-up; a 32-bit row needs no padding
+    flipped = (img32.flipped(Qt.Orientation.Vertical) if hasattr(img32, "flipped")
+               else img32.mirrored(False, True))
+    ptr = flipped.constBits()
+    ptr.setsize(flipped.sizeInBytes())
+    pixels = bytes(ptr)
+
+    class BITMAPINFOHEADER(ctypes.Structure):
+        _fields_ = [
+            ("biSize", wintypes.DWORD), ("biWidth", wintypes.LONG), ("biHeight", wintypes.LONG),
+            ("biPlanes", wintypes.WORD), ("biBitCount", wintypes.WORD),
+            ("biCompression", wintypes.DWORD), ("biSizeImage", wintypes.DWORD),
+            ("biXPelsPerMeter", wintypes.LONG), ("biYPelsPerMeter", wintypes.LONG),
+            ("biClrUsed", wintypes.DWORD), ("biClrImportant", wintypes.DWORD),
+        ]
+
+    hdr = BITMAPINFOHEADER(ctypes.sizeof(BITMAPINFOHEADER), flipped.width(), flipped.height(),
+                           1, 32, 0, len(pixels), 0, 0, 0, 0)
+    payloads = [(8, bytes(hdr) + pixels)]  # 8 = CF_DIB
+    if has_alpha:
+        buf = QBuffer()
+        buf.open(QIODevice.OpenModeFlag.WriteOnly)
+        img.save(buf, "PNG", 80)  # higher quality value = lighter compression = faster
+        payloads.append((user32.RegisterClipboardFormatW("PNG"), bytes(buf.data())))
+
+    for _ in range(20):  # another program may be holding the clipboard briefly
+        if user32.OpenClipboard(hwnd):
+            break
+        time.sleep(0.05)
+    else:
+        raise OSError("clipboard is busy")
+    try:
+        user32.EmptyClipboard()
+        for fmt, data in payloads:
+            h = kernel32.GlobalAlloc(0x0002, len(data))  # GMEM_MOVEABLE
+            if not h:
+                raise OSError("GlobalAlloc failed")
+            ctypes.memmove(kernel32.GlobalLock(h), data, len(data))
+            kernel32.GlobalUnlock(h)
+            if not user32.SetClipboardData(fmt, h):
+                kernel32.GlobalFree(h)  # ownership passes to Windows only on success
+                raise OSError("SetClipboardData failed")
+    finally:
+        user32.CloseClipboard()
 
 
 def explorer_view_files(target):
@@ -608,8 +682,15 @@ class PhotoViewer(QMainWindow):
         reader = QImageReader(str(p))
         reader.setAutoTransform(True)
         img = reader.read()
-        if not img.isNull():
-            QGuiApplication.clipboard().setImage(img)
+        if img.isNull():
+            return
+        if sys.platform == "win32":
+            try:
+                set_clipboard_image_win32(img, int(self.winId()))
+                return
+            except OSError:
+                pass  # fall back to Qt's (slow to paste, but working) clipboard
+        QGuiApplication.clipboard().setImage(img)
 
     def delete_image(self):
         """Move the current image to the Recycle Bin and show the next one."""
