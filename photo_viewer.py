@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import (
     QPixmap, QMovie, QAction, QActionGroup, QKeySequence, QImageReader,
-    QPainter, QImage, QClipboard, QGuiApplication,
+    QPainter, QImage, QClipboard, QGuiApplication, QTransform,
 )
 from PyQt6.QtCore import Qt, QTimer, QSize, QRect, QPoint, QBuffer, QIODevice
 
@@ -159,6 +159,103 @@ def set_clipboard_image_win32(img, hwnd=None):
                 raise OSError("SetClipboardData failed")
     finally:
         user32.CloseClipboard()
+
+
+# ---- rotation written back to the file ----
+
+ROTATE_SAVE_FORMATS = {".png": "PNG", ".bmp": "BMP", ".webp": "WEBP", ".tif": "TIFF", ".tiff": "TIFF"}
+
+# EXIF orientation after one more 90-degree clockwise turn (2/7/4/5 are the mirrored set)
+_EXIF_CW = {1: 6, 6: 3, 3: 8, 8: 1, 2: 7, 7: 4, 4: 5, 5: 2}
+_EXIF_CCW = {v: k for k, v in _EXIF_CW.items()}
+
+
+def _jpeg_rotate_exif(data, clockwise):
+    """Return JPEG bytes with the EXIF orientation turned 90 degrees, pixels untouched.
+
+    Returns None when the file has an EXIF block without an orientation entry
+    (adding one would mean rewriting the whole IFD); the caller then re-encodes.
+    """
+    import struct
+
+    if data[:2] != b"\xff\xd8":
+        raise OSError("not a JPEG file")
+    step = _EXIF_CW if clockwise else _EXIF_CCW
+    pos = 2
+    while pos + 4 <= len(data) and data[pos] == 0xFF:
+        marker = data[pos + 1]
+        if marker == 0xDA:  # start of scan: no more metadata segments
+            break
+        seg_len = struct.unpack(">H", data[pos + 2:pos + 4])[0]
+        body = pos + 4
+        if marker == 0xE1 and data[body:body + 6] == b"Exif\x00\x00":
+            tiff = body + 6
+            bo = "<" if data[tiff:tiff + 2] == b"II" else ">"
+            ifd = tiff + struct.unpack(bo + "I", data[tiff + 4:tiff + 8])[0]
+            count = struct.unpack(bo + "H", data[ifd:ifd + 2])[0]
+            for i in range(count):
+                e = ifd + 2 + 12 * i
+                tag, typ = struct.unpack(bo + "HH", data[e:e + 4])
+                if tag == 0x0112 and typ == 3:  # Orientation, SHORT
+                    cur = struct.unpack(bo + "H", data[e + 8:e + 10])[0]
+                    new = step.get(cur, step[1])
+                    return data[:e + 8] + struct.pack(bo + "H", new) + data[e + 10:]
+            return None
+        pos += 2 + seg_len
+
+    # no EXIF at all: add a minimal APP1 holding only the orientation, right after SOI
+    tiff = b"MM\x00\x2a\x00\x00\x00\x08" + b"\x00\x01" + \
+        struct.pack(">HHIHH", 0x0112, 3, 1, step[1], 0) + b"\x00\x00\x00\x00"
+    app1 = b"Exif\x00\x00" + tiff
+    return data[:2] + b"\xff\xe1" + struct.pack(">H", len(app1) + 2) + app1 + data[2:]
+
+
+def rotate_image_file(path, clockwise):
+    """Rotate the image file on disk by 90 degrees. Raises OSError with a message on failure.
+
+    JPEG only has its EXIF orientation changed, so there is no quality loss.
+    PNG/BMP/TIFF are re-saved losslessly, WebP in lossless mode.
+    """
+    suffix = path.suffix.lower()
+    probe = QImageReader(str(path))
+    animated = probe.supportsAnimation() and probe.imageCount() > 1
+    del probe  # the reader keeps the file open, which would block os.replace on Windows
+    if animated:
+        raise OSError("動態圖片不支援旋轉")
+    tmp = path.with_name(".~rotate~" + path.name)
+    if suffix in (".jpg", ".jpeg"):
+        data = path.read_bytes()
+        out = _jpeg_rotate_exif(data, clockwise)
+        if out is not None:
+            tmp.write_bytes(out)
+            _replace_or_cleanup(tmp, path)
+            return
+        fmt, quality = "JPEG", 95  # EXIF without an orientation entry: re-encode once
+    elif suffix in ROTATE_SAVE_FORMATS:
+        fmt = ROTATE_SAVE_FORMATS[suffix]
+        quality = 100 if fmt == "WEBP" else -1  # Qt saves WebP losslessly at 100
+    else:
+        raise OSError("此格式不支援旋轉（" + suffix + "）")
+    reader = QImageReader(str(path))
+    reader.setAutoTransform(True)
+    img = reader.read()
+    if img.isNull():
+        raise OSError(reader.errorString())
+    del reader
+    img = img.transformed(QTransform().rotate(90 if clockwise else -90))
+    if not img.save(str(tmp), fmt, quality):
+        tmp.unlink(missing_ok=True)
+        raise OSError("無法寫入檔案")
+    _replace_or_cleanup(tmp, path)
+
+
+def _replace_or_cleanup(tmp, path):
+    """Swap the rotated temp file in; on failure remove it so nothing is left behind."""
+    try:
+        os.replace(tmp, path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def explorer_view_files(target):
@@ -425,6 +522,9 @@ class ImageView(QWidget):
     def clear_content(self):
         if self._movie is not None:
             self._movie.stop()
+            # deleteLater only frees the movie on the next event-loop pass; drop the
+            # file now so a following rotate or delete is not blocked by the lock
+            self._movie.setFileName("")
             self._movie.deleteLater()
             self._movie = None
         self._pixmap = None
@@ -556,6 +656,9 @@ class PhotoViewer(QMainWindow):
         a = QAction("\u25c0 \u4e0a\u4e00\u5f35", self); a.triggered.connect(self.prev_image); tb.addAction(a)
         a = QAction("\u4e0b\u4e00\u5f35 \u25b6", self); a.triggered.connect(self.next_image); tb.addAction(a)
         tb.addSeparator()
+        a = QAction("\u21ba \u5de6\u8f49 90\u00b0", self); a.triggered.connect(self.rotate_left); tb.addAction(a)
+        a = QAction("\u21bb \u53f3\u8f49 90\u00b0", self); a.triggered.connect(self.rotate_right); tb.addAction(a)
+        tb.addSeparator()
 
         tb.addWidget(QLabel(" \u5e7b\u71c8\u7247\u9593\u9694\uff1a "))
         self.interval_box = QComboBox()
@@ -589,6 +692,8 @@ class PhotoViewer(QMainWindow):
         add("F12", self.toggle_slideshow)
         add("Escape", self.on_escape)
         add("Delete", self.delete_image)
+        add("Ctrl+L", self.rotate_left)
+        add("Ctrl+R", self.rotate_right)
         add("Ctrl+O", self.action_open_file)
         add("Ctrl+Shift+O", self.action_open_dir)
         add("Ctrl+0", self.view.reset_zoom)
@@ -629,6 +734,10 @@ class PhotoViewer(QMainWindow):
         menu.addSeparator()
         has_file = bool(self.files and 0 <= self.index < len(self.files))
         a = menu.addAction("\u958b\u555f\u6240\u5728\u8cc7\u6599\u593e", self.open_containing_folder)
+        a.setEnabled(has_file)
+        a = menu.addAction("\u21ba \u5de6\u8f49 90\u00b0 (Ctrl+L)", self.rotate_left)
+        a.setEnabled(has_file)
+        a = menu.addAction("\u21bb \u53f3\u8f49 90\u00b0 (Ctrl+R)", self.rotate_right)
         a.setEnabled(has_file)
         a = menu.addAction("\u8907\u88fd\u5716\u7247", self.copy_image)
         a.setEnabled(has_file)
@@ -691,6 +800,25 @@ class PhotoViewer(QMainWindow):
             except OSError:
                 pass  # fall back to Qt's (slow to paste, but working) clipboard
         QGuiApplication.clipboard().setImage(img)
+
+    def rotate_left(self):
+        self._rotate(clockwise=False)
+
+    def rotate_right(self):
+        self._rotate(clockwise=True)
+
+    def _rotate(self, clockwise):
+        """Rotate the current image 90 degrees and save it back to the file."""
+        p = self._current_path()
+        if p is None:
+            return
+        self.view.clear_content()  # an open QMovie would keep the file locked
+        try:
+            rotate_image_file(p, clockwise)
+        except OSError as ex:
+            QMessageBox.warning(self, "無法旋轉", p.name + "\n" + str(ex))
+        self.show_current()
+        self._restart_slideshow_timer()
 
     def delete_image(self):
         """Move the current image to the Recycle Bin and show the next one."""
