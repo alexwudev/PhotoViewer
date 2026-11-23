@@ -1,148 +1,150 @@
 # PhotoViewer
 
-仿 Windows 10 相片檢視器的輕量圖片檢視器，以 PyQt6 撰寫，支援 GIF／WebP 動圖與幻燈片播放。
+**English** | [繁體中文](README.zh-TW.md)
 
-## 功能
+A lightweight image viewer modeled on the Windows 10 Photo Viewer, written in PyQt6, with support for animated GIF / WebP and slideshows.
 
-- 支援 jpg、png、bmp、gif、webp、tif、ico、svg
-- 預設「適合視窗」：比視窗大的圖等比縮小、比視窗小的圖等比放大，直到長或寬其中一邊貼齊視窗
-- 滑鼠滾輪縮放、放大後可拖曳平移；Ctrl+0 回到適合視窗
-- 幻燈片（F5／F11／F12 全螢幕），間隔 1–30 秒八段可選，Space 暫停／繼續；離開全螢幕後視窗維持最大化
-- 「關閉全部圖片」按鈕：一次關閉所有開著的 PhotoViewer 視窗（其他視窗以正常方式關閉，不是強制結束）
-- Delete 鍵：圖片移到資源回收筒，並自動切到下一張（幻燈片中亦可）
-- 左轉／右轉 90°：直接寫回檔案，重新開啟仍維持旋轉後的方向
-  - JPEG 只改 EXIF 方向標記，影像不重新壓縮、畫質不變（少數有 EXIF 卻沒有方向欄位的 JPEG 會以品質 95 重存一次）
-  - PNG、BMP、TIFF 無損重存，WebP 以無損模式重存
-  - 動態 GIF／WebP、SVG、ICO 不支援旋轉
-- 從檔案總管的**搜尋結果**開啟圖片時，會讀取該搜尋視窗的結果，跨資料夾瀏覽與播放幻燈片
-- 排序依檔名自然排序（p1、p2、…、p10）；搜尋結果跨資料夾時，先把同一資料夾依檔名跑完，再換下一個資料夾（資料夾之間同樣依名稱自然排序）
+## Features
 
-## 快捷鍵
+- Supports jpg, png, bmp, gif, webp, tif, ico and svg
+- "Fit to window" by default: images larger than the window are scaled down and smaller images are scaled up, keeping the aspect ratio, until one side touches the window edge
+- Mouse-wheel zoom and drag-to-pan when zoomed in; Ctrl+0 returns to fit to window
+- Slideshow (F5 / F11 / F12 for full screen) with eight interval steps from 1 to 30 seconds; Space pauses / resumes. After leaving full screen the window stays maximized
+- "Close all images" button: closes every open PhotoViewer window at once (the other windows are closed normally, not killed)
+- Delete key: moves the image to the Recycle Bin and automatically shows the next one (also works during a slideshow)
+- Rotate 90° left / right: the rotation is written back to the file, so it persists after reopening
+  - JPEG: only the EXIF orientation tag is changed, so the image is not recompressed and quality is unchanged (the few JPEGs that have EXIF data but no orientation field are re-saved once at quality 95)
+  - PNG, BMP and TIFF are re-saved losslessly; WebP is re-saved in lossless mode
+  - Animated GIF / WebP, SVG and ICO cannot be rotated
+- When an image is opened from File Explorer **search results**, PhotoViewer reads that search window's result list, so you can browse and run slideshows across folders
+- Files are sorted by natural filename order (p1, p2, …, p10). When search results span several folders, all files in one folder are shown in filename order before moving to the next folder (folders are also in natural name order)
 
-| 按鍵 | 功能 |
+## Keyboard shortcuts
+
+| Key | Action |
 | --- | --- |
-| ← / → | 上一張／下一張 |
-| Space | 幻燈片暫停／繼續（非幻燈片時為下一張） |
-| F5 / F11 / F12 | 開始／停止全螢幕幻燈片 |
-| Esc | 離開幻燈片或全螢幕（回到最大化視窗） |
-| Delete | 移到資源回收筒並顯示下一張 |
-| Ctrl+L / Ctrl+R | 左轉／右轉 90°（寫回檔案） |
-| Ctrl+O / Ctrl+Shift+O | 開啟圖片／開啟資料夾 |
-| Ctrl+0 | 適合視窗 |
+| ← / → | Previous / next image |
+| Space | Pause / resume slideshow (next image outside a slideshow) |
+| F5 / F11 / F12 | Start / stop full-screen slideshow |
+| Esc | Leave slideshow or full screen (back to a maximized window) |
+| Delete | Move to Recycle Bin and show the next image |
+| Ctrl+L / Ctrl+R | Rotate 90° left / right (written to the file) |
+| Ctrl+O / Ctrl+Shift+O | Open image / open folder |
+| Ctrl+0 | Fit to window |
 
-右鍵選單另有：幻燈片速率、開啟所在資料夾、左轉／右轉 90°、複製圖片、刪除圖片、關閉全部圖片。
+The right-click menu also has: slideshow speed, open containing folder, rotate 90° left / right, copy image, delete image and close all images.
 
 ---
 
-## 在新電腦上重新安裝（從零開始）
+## Reinstalling on a new computer (from scratch)
 
-電腦壞掉或重灌後，照下面順序做完即可恢復原本的使用方式。全部步驟約 10 分鐘，不需要系統管理員權限（全部裝在目前使用者底下）。
+After a broken computer or a fresh Windows install, follow these steps in order to get back to the same setup. It takes about 10 minutes and needs no administrator rights (everything is installed for the current user).
 
-### 1. 安裝 Python 與 Git
+### 1. Install Python and Git
 
-- **Python 3.10 以上**：到 <https://www.python.org/downloads/windows/> 下載安裝程式。
-  安裝第一個畫面**一定要勾選「Add python.exe to PATH」**，否則第 3 步的打包腳本找不到 Python。
-- **Git**：到 <https://git-scm.com/download/win> 下載安裝，選項全部用預設值即可。
-  （不想裝 Git 的話，可在 GitHub 頁面按 Code → Download ZIP，解壓縮後跳到第 3 步。）
+- **Python 3.10 or later**: download the installer from <https://www.python.org/downloads/windows/>.
+  On the first screen of the installer, **be sure to tick "Add python.exe to PATH"**, or the build script in step 3 will not find Python.
+- **Git**: download and install from <https://git-scm.com/download/win>; the default options are fine.
+  (If you would rather not install Git, click Code → Download ZIP on the GitHub page, extract it and skip to step 3.)
 
-裝好後開一個新的命令提示字元，確認兩個指令都有反應：
+Then open a new Command Prompt and check that both commands respond:
 
 ```
 python --version
 git --version
 ```
 
-### 2. 下載原始碼
+### 2. Download the source code
 
 ```
 git clone https://github.com/alexwudev/PhotoViewer.git
 ```
 
-放在哪裡都可以（例如桌面）。之後的步驟都在這個 `PhotoViewer` 資料夾裡做。
+Any location works (for example the Desktop). All following steps are done inside this `PhotoViewer` folder.
 
-### 3. 打包並安裝
+### 3. Build and install
 
-在資料夾裡按兩下 **`photo_viewer_build.bat`**。它會依序：
+Double-click **`photo_viewer_build.bat`** in the folder. It will:
 
-1. 用 pip 安裝 PyQt6、pyinstaller、comtypes；
-2. 用 PyInstaller 打包成 `dist\PhotoViewer\PhotoViewer.exe`；
-3. 把整個程式複製到 `%LOCALAPPDATA%\PhotoViewer\`（即 `C:\Users\<你的帳號>\AppData\Local\PhotoViewer\`）。
+1. install PyQt6, pyinstaller and comtypes with pip;
+2. build `dist\PhotoViewer\PhotoViewer.exe` with PyInstaller;
+3. copy the whole program to `%LOCALAPPDATA%\PhotoViewer\` (that is, `C:\Users\<your account>\AppData\Local\PhotoViewer\`).
 
-看到 `Done! Installed to: ...PhotoViewer.exe` 就成功了，按任意鍵關閉視窗。
-打包需要一兩分鐘，期間畫面捲動很多訊息是正常的。
+When you see `Done! Installed to: ...PhotoViewer.exe`, it worked; press any key to close the window.
+Building takes a minute or two, and a lot of scrolling output is normal.
 
-### 4. 註冊到「開啟檔案」清單
+### 4. Register in the "Open with" list
 
-按兩下 **`photo_viewer_register.reg`**，出現登錄編輯程式的警告時按「是」。
-這一步會：
+Double-click **`photo_viewer_register.reg`** and click "Yes" when Registry Editor shows its warning.
+This step:
 
-- 讓 PhotoViewer 出現在圖片的右鍵「開啟檔案」清單裡；
-- 保留檔案總管的圖片縮圖（不會全部變成程式圖示）。
+- makes PhotoViewer appear in the right-click "Open with" list for images;
+- keeps File Explorer's image thumbnails (instead of turning them all into the program icon).
 
-檔案裡的路徑寫成 `%LOCALAPPDATA%`，任何帳號名稱都適用，不必修改。
+Paths in the file are written as `%LOCALAPPDATA%`, so it works for any account name without editing.
 
-### 5. 重新啟動檔案總管
+### 5. Restart File Explorer
 
-工作管理員 → 找到「Windows 檔案總管」→ 右鍵「重新啟動」（或直接登出再登入）。
+Task Manager → find "Windows Explorer" → right-click "Restart" (or simply sign out and back in).
 
-### 6. 設為預設的看圖程式
+### 6. Make it the default image viewer
 
-對任一張圖片按右鍵 → **開啟檔案** → **選擇其他應用程式** → 選 **Photo Viewer** → 勾選 **「一律使用此應用程式開啟 .jpg 檔案」** → 確定。
+Right-click any image → **Open with** → **Choose another app** → select **Photo Viewer** → tick **"Always use this app to open .jpg files"** → OK.
 
-每種副檔名要各設一次（.jpg、.jpeg、.png、.gif、.webp 等常用的設一下即可）。
-也可以到「設定 → 應用程式 → 預設應用程式」一次調整。
+Do this once per file extension (setting the common ones such as .jpg, .jpeg, .png, .gif and .webp is enough).
+You can also change them all at once under Settings → Apps → Default apps.
 
-### 7. 確認
+### 7. Check
 
-- 按兩下一張圖片，應該用 PhotoViewer 開啟；
-- 在檔案總管搜尋框輸入關鍵字，從結果開一張圖，標題列應出現「（搜尋結果）」字樣，按 → 會跨資料夾切換。
+- Double-clicking an image should open it in PhotoViewer;
+- Type a keyword in the File Explorer search box and open an image from the results: the title bar should show "（搜尋結果）" (search results), and → should move across folders.
 
 ---
 
-## 更新程式
+## Updating
 
-改過 `photo_viewer.py` 或拉了新版之後：
+After editing `photo_viewer.py` or pulling a new version:
 
 ```
 git pull
 ```
 
-再按兩下 `photo_viewer_build.bat` 重新打包安裝即可，不必重新匯入 `.reg`。
-（若打包時出現檔案被占用的錯誤，先把所有開著的 PhotoViewer 視窗關掉。）
+Then double-click `photo_viewer_build.bat` again to rebuild and reinstall; there is no need to import the `.reg` again.
+(If the build reports that a file is in use, close all open PhotoViewer windows first.)
 
-## 不打包、直接執行原始碼
+## Running from source without packaging
 
 ```
 pip install PyQt6 comtypes
-python photo_viewer.py [圖片或資料夾路徑]
+python photo_viewer.py [image or folder path]
 ```
 
-`comtypes` 只用於「搜尋結果跨資料夾」功能；沒裝也能執行，只是會退回單一資料夾模式。
+`comtypes` is only used for browsing search results across folders; without it the program still runs, falling back to single-folder mode.
 
-## 疑難排解
+## Troubleshooting
 
-| 狀況 | 處理方式 |
+| Problem | Solution |
 | --- | --- |
-| 執行 bat 顯示找不到 `python` | 安裝 Python 時沒勾「Add to PATH」；重新執行安裝程式選 Modify 補勾，或重裝 |
-| 右鍵「開啟檔案」清單沒有 Photo Viewer | 確認第 4 步有匯入 `.reg`，並重新啟動檔案總管 |
-| 檔案總管縮圖變成程式圖示 | 重新匯入 `.reg` 後重新啟動檔案總管 |
-| 從搜尋結果開圖，卻只能看同資料夾的圖 | 開圖時搜尋視窗必須還開著；搜尋尚未跑完時只會讀到當下已列出的結果 |
-| 按 Delete 後想救回圖片 | 圖片在資源回收筒，右鍵「還原」即可 |
+| The bat file says `python` cannot be found | "Add to PATH" was not ticked when installing Python; run the installer again, choose Modify and tick it, or reinstall |
+| Photo Viewer is missing from the right-click "Open with" list | Make sure the `.reg` was imported in step 4, then restart File Explorer |
+| File Explorer thumbnails turned into the program icon | Import the `.reg` again and restart File Explorer |
+| Opening an image from search results only shows images from the same folder | The search window must still be open when you open the image; if the search has not finished, only the results listed so far are read |
+| You want an image back after pressing Delete | It is in the Recycle Bin; right-click it and choose "Restore" |
 
-## 解除安裝
+## Uninstalling
 
-1. 刪除資料夾 `%LOCALAPPDATA%\PhotoViewer`。
-2. 用登錄編輯程式（regedit）刪除下列機碼：
+1. Delete the folder `%LOCALAPPDATA%\PhotoViewer`.
+2. In Registry Editor (regedit), delete these keys:
    - `HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewer.exe`
    - `HKEY_CURRENT_USER\Software\Classes\Applications\PhotoViewerWebp.exe`
    - `HKEY_CURRENT_USER\Software\Classes\PhotoViewer.Image`
-3. 到「設定 → 應用程式 → 預設應用程式」把圖片改回其他程式。
+3. Under Settings → Apps → Default apps, switch images back to another program.
 
-## 檔案說明
+## Files
 
-| 檔案 | 用途 |
+| File | Purpose |
 | --- | --- |
-| `photo_viewer.py` | 主程式（單一檔案） |
-| `photo_viewer_build.bat` | 安裝相依套件、打包、安裝到 `%LOCALAPPDATA%` |
-| `PhotoViewer.spec` | PyInstaller 打包設定（`python -m PyInstaller --noconfirm PhotoViewer.spec`） |
-| `photo_viewer_register.reg` | 註冊「開啟檔案」清單與縮圖設定 |
+| `photo_viewer.py` | Main program (single file) |
+| `photo_viewer_build.bat` | Installs dependencies, builds and installs to `%LOCALAPPDATA%` |
+| `PhotoViewer.spec` | PyInstaller build settings (`python -m PyInstaller --noconfirm PhotoViewer.spec`) |
+| `photo_viewer_register.reg` | Registers the "Open with" entry and thumbnail settings |
